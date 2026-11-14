@@ -1,45 +1,62 @@
+
 import unittest
-from app import app  # Import your Flask app instance
+import re
+from app import app
 
 
 class TestModelAppIntegration(unittest.TestCase):
 
-	def setUp(self):
-		app.testing = True
-		self.client = app.test_client()
-		
-	def test_model_app_integration(self):
-		# Valid test input that should work with the trained model
-		form_data = {
-			'temperature': '275.15',   # Kelvin
-			'pressure': '1013',        # hPa
-			'humidity': '85',          # %
-			'wind_speed': '3.6',       # m/s
-			'wind_deg': '180',         # degrees
-			'rain_1h': '0',            # mm
-			'rain_3h': '0',            # mm
-			'snow': '0',               # mm
-			'clouds': '20'             # %
-		}
+    def setUp(self):
+        app.testing = True
+        self.client = app.test_client()
 
-		response = self.client.post('/', data=form_data)
-	
-		# Complete below
-		# Ensure that the result page (response.data) should include a weather prediction
-		
-	
-		# Ensure that the result page should include a prediction time
-		
+    # Test that weather information is submitted successfully
+    # and processed by the trained machine learning model
+    def test_model_app_integration(self):
 
-		html_text = response.data.decode('utf-8').lower()
-		valid_classes = [
-			'clear', 'cloudy', 'drizzly', 'foggy', 'hazey',
-			'misty', 'rainy', 'smokey', 'thunderstorm'
-		]
-		found = any(weather in html_text for weather in valid_classes)
-		
-		# Ensure that classification is in valid classes, provide an error message if not.
-		
+        form_data = {
+            'temperature': '275.15',
+            'pressure': '1013',
+            'humidity': '85',
+            'wind_speed': '3.6',
+            'wind_deg': '180',
+            'rain_1h': '0',
+            'rain_3h': '0',
+            'snow': '0',
+            'clouds': '20'
+        }
+
+        # Submit weather information to the Flask application
+        response = self.client.post('/', data=form_data)
+
+        html_text = response.data.decode('utf-8').lower()
+
+        # Check that the application responds successfully
+        self.assertEqual(response.status_code, 200)
+
+        # Check that the results page displays a weather prediction
+        valid_classes = [
+            'clear', 'cloudy', 'drizzly', 'foggy', 'hazey',
+            'misty', 'rainy', 'smokey', 'thunderstorm'
+        ]
+
+        prediction_found = re.search(
+            r'the weather is:</strong>\s*(' +
+            '|'.join(valid_classes) + r')\b',
+            html_text
+        )
+
+        self.assertIsNotNone(
+            prediction_found,
+            "A valid weather prediction was not displayed."
+        )
+
+        # Check that the prediction processing time is displayed
+        self.assertRegex(
+            html_text,
+            r'prediction time:</strong>\s*\d+(?:\.\d+)?\s*ms'
+        )
+
 
 if __name__ == '__main__':
-	unittest.main()
+    unittest.main()
