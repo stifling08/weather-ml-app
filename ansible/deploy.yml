@@ -1,0 +1,41 @@
+
+---
+- name: Deploy weather application
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Deploy DockerHub image to Kubernetes
+      ansible.builtin.command:
+        cmd: kubectl apply -f "{{ playbook_dir }}/../k8s/deployment.yaml"
+
+    - name: Create Kubernetes Service
+      ansible.builtin.command:
+        cmd: kubectl apply -f "{{ playbook_dir }}/../k8s/service.yaml"
+
+    - name: Scale deployment to two replicas
+      ansible.builtin.command:
+        cmd: kubectl scale deployment weather-ml-app --replicas=2
+
+    - name: Wait for deployment to become ready
+      ansible.builtin.command:
+        cmd: kubectl rollout status deployment/weather-ml-app --timeout=300s
+      changed_when: false
+
+    - name: Check deployment and replicas
+      ansible.builtin.command: kubectl get deployments
+      register: deployments
+      changed_when: false
+
+    - name: Display deployment information
+      ansible.builtin.debug:
+        var: deployments.stdout_lines
+
+    - name: Check Kubernetes Service
+      ansible.builtin.command: kubectl get services
+      register: services
+      changed_when: false
+
+    - name: Display Service information
+      ansible.builtin.debug:
+        var: services.stdout_lines
