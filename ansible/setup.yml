@@ -1,0 +1,39 @@
+
+---
+- name: Prepare production server
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Get stable Kubernetes version
+      ansible.builtin.uri:
+        url: https://dl.k8s.io/release/stable.txt
+        return_content: true
+      register: kubectl_version
+
+    - name: Install Kubectl
+      become: true
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_version.content | trim }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+
+    - name: Install Minikube
+      become: true
+      ansible.builtin.get_url:
+        url: https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+        dest: /usr/local/bin/minikube
+        mode: '0755'
+
+    - name: Start Minikube
+      ansible.builtin.command:
+        cmd: minikube start --driver=docker --cpus=2 --memory=4096
+
+    - name: Check Kubernetes nodes
+      ansible.builtin.command: kubectl get nodes
+      register: nodes
+      changed_when: false
+
+    - name: Display Kubernetes nodes
+      ansible.builtin.debug:
+        var: nodes.stdout_lines
