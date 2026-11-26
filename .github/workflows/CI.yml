@@ -1,0 +1,78 @@
+name: CI - Test and Build Weather ML App
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: weather-ml-app
+
+jobs:
+  build-test-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: (a) Check out repository changes
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: (b) Install Flask and Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: (c) Run unit tests
+        run: python -m unittest discover -s tests -p "unit_test.py" -v
+
+      - name: (c) Run smoke tests
+        run: python -m unittest discover -s tests -p "smoke_test.py" -v
+
+      - name: (c) Run integration tests
+        run: python -m unittest discover -s tests -p "integration_test.py" -v
+
+      - name: (d) Build Docker image
+        run: docker build --tag "${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${GITHUB_SHA}" .
+
+      - name: (e) Start container and verify that the Flask app responds
+        run: |
+          set -e
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${GITHUB_SHA}"
+          CONTAINER_ID="$(docker run --detach --publish 5000:5000 "$IMAGE")"
+          trap 'docker logs "$CONTAINER_ID" || true; docker rm --force "$CONTAINER_ID" || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5000/ > /dev/null; then
+              echo "Container started and the application returned HTTP success."
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Container did not become ready in time."
+          docker logs "$CONTAINER_ID"
+          exit 1
+
+      - name: Log in to DockerHub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: (f) Push image to DockerHub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}"
+          docker tag "$IMAGE:${GITHUB_SHA}" "$IMAGE:latest"
+          docker push "$IMAGE:${GITHUB_SHA}"
+          docker push "$IMAGE:latest"

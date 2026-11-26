@@ -1,0 +1,40 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["CI - Test and Build Weather ML App"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tested commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Install and start Minikube
+        run: |
+          curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+          sudo install minikube-linux-amd64 /usr/local/bin/minikube
+          minikube start --driver=docker
+
+      - name: Point deployment at the new image
+        run: |
+          sed -i "s|image: .*|image: ${{ secrets.DOCKERHUB_USERNAME }}/weather-ml-app:${{ github.event.workflow_run.head_sha }}|" k8s/deployment.yaml
+
+      - name: Apply deployment and service
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+
+      - name: Wait for rolling update to finish
+        run: kubectl rollout status deployment/weather-ml-app --timeout=300s
+
+      - name: Verify
+        run: |
+          kubectl get pods -l app=weather-ml-app
+          kubectl get service weather-ml-service
