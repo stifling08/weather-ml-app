@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: weather-ml-app
-          image: jakehardy26/weather-ml-app:v1
+          image: jakehardy26/weather-ml-app:v2
           imagePullPolicy: Always
           ports:
             - containerPort: 5000
